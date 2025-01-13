@@ -1,8 +1,9 @@
 from django.shortcuts import render
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from .models import User
 from django.views.decorators.csrf import csrf_exempt
 import json
+
 
 # Create your views here.
 @csrf_exempt
@@ -63,3 +64,9 @@ def delete_user(request, id):
             return JsonResponse({'message': 'User deleted successfully'}, safe=False, status=204)
         except Exception as e:
             return JsonResponse({'error': str(e)}, safe=False, status=400)
+
+
+# User view
+def user_view(request):
+    return render(request, 'users/user.html')
+    
