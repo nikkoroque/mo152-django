@@ -25,6 +25,7 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls')),  # DRF login/logout
     path('moit/', views.moit_view),
     path('users/', include('users.urls')),
+    path('posts/', include('posts.urls')),
 ]
 
 
