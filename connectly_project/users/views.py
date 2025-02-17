@@ -3,6 +3,13 @@ from django.http import JsonResponse, HttpResponse
 from .models import User
 from django.views.decorators.csrf import csrf_exempt
 import json
+from django.contrib.auth import authenticate
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.authtoken.models import Token
+from .serializers import UserSerializer
 
 
 # Create your views here.
@@ -28,15 +35,25 @@ def get_user_by_id(request, id):
 
 
 # Create a new user
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def create_user(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            user = User.objects.create(username=data['username'], email=data['email'])
-            return JsonResponse({'message': 'User created successfully', 'user': user.username}, safe=False, status=201)
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, safe=False, status=400)
+    try:
+        serializer = UserSerializer(data=request.data)
+        if serializer.is_valid():
+            user = User.objects.create_user(
+                username=serializer.validated_data['username'],
+                email=serializer.validated_data['email'],
+                password=serializer.validated_data['password']
+            )
+            token, _ = Token.objects.get_or_create(user=user)
+            return Response({
+                'token': token.key,
+                'user': UserSerializer(user).data
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # Update a user
@@ -69,4 +86,19 @@ def delete_user(request, id):
 # User view
 def user_view(request):
     return render(request, 'users/user.html')
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_user(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+    
+    user = authenticate(username=username, password=password)
+    if user:
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({
+            'token': token.key,
+            'user': UserSerializer(user).data
+        })
+    return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
     

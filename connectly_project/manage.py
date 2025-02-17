@@ -15,7 +15,13 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
-    execute_from_command_line(sys.argv)
+    
+    # Use SSL server when running development server
+    if sys.argv[1] == 'runserver':
+        from runserver_ssl import Command
+        Command().run_from_argv(['manage.py', 'runserver', '--noreload'])
+    else:
+        execute_from_command_line(sys.argv)
 
 
 if __name__ == '__main__':
