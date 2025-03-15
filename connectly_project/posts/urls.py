@@ -1,9 +1,11 @@
 from django.urls import path
-from .views import PostListCreate, PostDetailView
+from .views import PostListCreate, PostDetailView, LikePostView, UnlikePostView
 
 
 urlpatterns = [
     path('posts/', PostListCreate.as_view(), name='post-list-create'),
     path('posts/<int:pk>/', PostDetailView.as_view(), name='post-detail'),
+    path('posts/<int:post_id>/like/', LikePostView.as_view(), name='like-post'),  # Like a post
+    path('posts/<int:post_id>/unlike/', UnlikePostView.as_view(), name='unlike-post'),  # Unlike a post
 ]
 

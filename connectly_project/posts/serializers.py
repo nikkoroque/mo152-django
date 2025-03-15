@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Post, Comment
+from .models import Post, Comment, Like
 from users.models import User
 
 
@@ -11,11 +11,15 @@ class UserSerializer(serializers.ModelSerializer):
 
 class PostSerializer(serializers.ModelSerializer):
     comments = serializers.StringRelatedField(many=True, read_only=True)
+    like_count = serializers.SerializerMethodField()  # Add like count field
 
 
     class Meta:
         model = Post
-        fields = ['id', 'content', 'author', 'created_at', 'comments']
+        fields = ['id', 'content', 'author', 'created_at', 'comments', 'like_count']
+    
+    def get_like_count(self, obj):
+        return obj.likes.count()  # Count the likes related to the post
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -34,4 +38,10 @@ class CommentSerializer(serializers.ModelSerializer):
         if not User.objects.filter(id=value.id).exists():
             raise serializers.ValidationError("Author not found.")
         return value
+    
+class LikeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Like
+        fields = ['id', 'user', 'post', 'created_at']
+        read_only_fields = ['user']  # The user will be set automatically from the request
 

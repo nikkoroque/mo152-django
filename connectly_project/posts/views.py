@@ -4,10 +4,14 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from .models import Post, Comment
+from .models import Post, Comment, Like
 from .serializers import PostSerializer, CommentSerializer
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
 from .permissions import IsPostAuthor
+
 
 
 # class UserListCreate(APIView):
@@ -26,8 +30,6 @@ from .permissions import IsPostAuthor
 
 
 class PostListCreate(APIView):
-    permission_classes = [IsAuthenticated]
-
     def get(self, request):
         posts = Post.objects.all()
         serializer = PostSerializer(posts, many=True)
@@ -37,57 +39,9 @@ class PostListCreate(APIView):
     def post(self, request):
         serializer = PostSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(author=request.user)
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class PostDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self, pk):
-        try:
-            return Post.objects.get(pk=pk)
-        except Post.DoesNotExist:
-            return None
-
-    def check_object_permissions(self, request, obj):
-        # First check if user is admin
-        if request.user.groups.filter(name='Admin').exists():
-            return True
-            
-        # If not admin, check if user is the author
-        if obj.author != request.user:
-            self.permission_denied(
-                request,
-                message='You do not have permission to perform this action.',
-            )
-        return True
-
-    def get(self, request, pk):
-        post = self.get_object(pk)
-        if not post:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        self.check_object_permissions(request, post)
-        serializer = PostSerializer(post)
-        return Response(serializer.data)
-
-    def delete(self, request, pk):
-        post = self.get_object(pk)
-        if not post:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        
-        # Check if user is admin
-        if not request.user.groups.filter(name='Admin').exists():
-            # If not admin, check if user is the author
-            if post.author != request.user:
-                return Response(
-                    {'error': 'You do not have permission to perform this action.'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        
-        post.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class CommentListCreate(APIView):
@@ -103,3 +57,39 @@ class CommentListCreate(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PostDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsPostAuthor]
+
+    def get(self, request, pk):
+        post = get_object_or_404(Post, pk=pk)
+        self.check_object_permissions(request, post)  # Check if the user has access
+        return Response({"content": post.content})
+    
+class LikePostView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        """Like a post."""
+        post = get_object_or_404(Post, id=post_id)
+        like, created = Like.objects.get_or_create(user=request.user, post=post)
+
+        if not created:
+            return Response({"message": "You have already liked this post."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"message": "Post liked successfully"}, status=status.HTTP_201_CREATED)
+    
+class UnlikePostView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, post_id):
+        """Unlike a post."""
+        post = get_object_or_404(Post, id=post_id)
+        like = Like.objects.filter(user=request.user, post=post)
+
+        if not like.exists():
+            return Response({"message": "You haven't liked this post yet."}, status=status.HTTP_400_BAD_REQUEST)
+
+        like.delete()
+        return Response({"message": "Post unliked successfully"}, status=status.HTTP_204_NO_CONTENT)
