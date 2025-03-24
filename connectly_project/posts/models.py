@@ -1,10 +1,16 @@
 from django.db import models
-from users.models import User  # Import your custom User model
+from users.models import User
 
 class Post(models.Model):
+    PRIVACY_CHOICES = [
+        ('public', 'Public'),
+        ('private', 'Private'),
+    ]
+    
     content = models.TextField()
     author = models.ForeignKey(User, related_name='posts', on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
+    privacy = models.CharField(max_length=10, choices=PRIVACY_CHOICES, default='public')
 
     def __str__(self):
         return f"Post by {self.author.username} at {self.created_at}"
