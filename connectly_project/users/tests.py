@@ -96,3 +96,22 @@ class SecurityTest(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.regular_token.key}')
         response = self.client.get('/posts/posts/', secure=True)
         self.assertEqual(response.status_code, 200)  # Success
+
+    def test_post_privacy(self):
+        """Test post privacy settings"""
+        # Create a private post
+        private_post = Post.objects.create(
+            content='Private post content',
+            author=self.other_user,
+            privacy='private'
+        )
+        
+        # Regular user trying to view private post
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.regular_token.key}')
+        response = self.client.get(f'/posts/posts/{private_post.id}/', secure=True)
+        self.assertEqual(response.status_code, 403)  # Forbidden
+        
+        # Admin user should be able to view private post
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.admin_token.key}')
+        response = self.client.get(f'/posts/posts/{private_post.id}/', secure=True)
+        self.assertEqual(response.status_code, 200)  # Success

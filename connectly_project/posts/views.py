@@ -10,7 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
-from .permissions import IsPostAuthor
+from .permissions import IsPostAuthor, CanViewPost
+from django.db import models
 
 
 
@@ -30,14 +31,26 @@ from .permissions import IsPostAuthor
 
 
 class PostListCreate(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
-        posts = Post.objects.all()
+        # Get all public posts and user's own posts
+        posts = Post.objects.filter(
+            models.Q(privacy='public') | 
+            models.Q(author=request.user)
+        )
+        # Admin users can see all posts
+        if request.user.groups.filter(name='Admin').exists():
+            posts = Post.objects.all()
+            
         serializer = PostSerializer(posts, many=True)
         return Response(serializer.data)
 
 
     def post(self, request):
-        serializer = PostSerializer(data=request.data)
+        data = request.data.copy()
+        data['author'] = request.user.id
+        serializer = PostSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -60,13 +73,22 @@ class CommentListCreate(APIView):
 
 
 class PostDetailView(APIView):
-    permission_classes = [IsAuthenticated, IsPostAuthor]
+    permission_classes = [IsAuthenticated, CanViewPost]
 
     def get(self, request, pk):
         post = get_object_or_404(Post, pk=pk)
-        self.check_object_permissions(request, post)  # Check if the user has access
-        return Response({"content": post.content})
+        self.check_object_permissions(request, post)
+        serializer = PostSerializer(post)
+        return Response(serializer.data)
     
+    def delete(self, request, pk):
+        post = get_object_or_404(Post, pk=pk)
+        # Only admin users or post authors can delete posts
+        if request.user.groups.filter(name='Admin').exists() or post.author == request.user:
+            post.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
 class LikePostView(APIView):
     permission_classes = [IsAuthenticated]
 
