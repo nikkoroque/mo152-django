@@ -12,6 +12,10 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from .permissions import IsPostAuthor, CanViewPost
 from django.db import models
+from rest_framework.generics import ListAPIView
+from django.core.cache import cache
+from django.db.models import Q
+
 
 
 
@@ -115,3 +119,33 @@ class UnlikePostView(APIView):
 
         like.delete()
         return Response({"message": "Post unliked successfully"}, status=status.HTTP_204_NO_CONTENT)
+    
+
+class FeedView(ListAPIView):
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        # Show public posts to everyone, and private posts only to the owner
+        posts = Post.objects.filter(
+            Q(privacy="public") | Q(privacy="private", author=user)
+        ).order_by("-created_at")
+
+        # Optional: Get posts liked by the user
+        liked_posts = self.request.query_params.get("liked", None)
+        if liked_posts == "true":
+            posts = posts.filter(likes__user=user)
+
+        # Prefetch related data for performance
+        posts = posts.prefetch_related("comments", "likes")
+
+        # Caching frequently accessed posts
+        cache_key = f"user_feed_{user.id}"
+        cached_posts = cache.get(cache_key)
+        if cached_posts:
+            return cached_posts
+
+        cache.set(cache_key, posts, timeout=60 * 5)  # Cache for 5 minutes
+        return posts
