@@ -101,4 +101,20 @@ def login_user(request):
             'user': UserSerializer(user).data
         })
     return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def get_auth_token(request):
+    """Generate a token for user authentication."""
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    user = authenticate(username=username, password=password)
+    if not user:
+        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    token, created = Token.objects.get_or_create(user=user)
+    return Response({'token': token.key, 'user_id': user.id, 'username': user.username})
+    
     
