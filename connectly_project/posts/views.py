@@ -15,6 +15,7 @@ from django.db import models
 from rest_framework.generics import ListAPIView
 from django.core.cache import cache
 from django.db.models import Q
+from rest_framework.pagination import PageNumberPagination
 
 
 
@@ -34,21 +35,41 @@ from django.db.models import Q
 #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10  # Default posts per page
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 class PostListCreate(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Get all public posts and user's own posts
+        # Get public posts or posts authored by the user
         posts = Post.objects.filter(
-            models.Q(privacy='public') | 
+            models.Q(privacy='public') |
             models.Q(author=request.user)
         )
+
         # Admin users can see all posts
         if request.user.groups.filter(name='Admin').exists():
             posts = Post.objects.all()
-            
-        serializer = PostSerializer(posts, many=True)
-        return Response(serializer.data)
+
+        # Apply pagination
+        paginator = StandardResultsSetPagination()
+        paginated_posts = paginator.paginate_queryset(posts.order_by('-created_at'), request)
+        serializer = PostSerializer(paginated_posts, many=True)
+
+        return paginator.get_paginated_response(serializer.data)
+
+    def post(self, request):
+        data = request.data.copy()
+        data['author'] = request.user.id
+        serializer = PostSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
     def post(self, request):
